@@ -211,7 +211,6 @@ export function Doomchit() {
       <section className="stage">
         <div className="topbar">
           <div>
-            <p className="eyebrow">몰입을 위한 프로그래머블 비트</p>
             <h1>Doomchit</h1>
           </div>
           <div className="transport">
@@ -354,11 +353,19 @@ function RangeControl({
   suffix?: string
   onChange: (value: number) => void
 }) {
+  const fillPercent = max > min ? Math.max(0, Math.min(100, ((value - min) / (max - min)) * 100)) : 0
   return (
     <label>
       <span>{label}</span>
       <output>{value}{suffix}</output>
-      <input type="range" min={min} max={max} value={value} onChange={(event) => onChange(Number(event.target.value))} />
+      <input
+        type="range"
+        min={min}
+        max={max}
+        value={value}
+        style={{ '--fill': `${fillPercent}%` } as CSSProperties}
+        onChange={(event) => onChange(Number(event.target.value))}
+      />
     </label>
   )
 }
