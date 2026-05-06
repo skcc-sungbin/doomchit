@@ -298,11 +298,11 @@ export function Doomchit() {
 
       <aside className="panel">
         <div className="tabs" role="tablist" aria-label="편집 모드">
-          <button className={mode === 'json' ? 'active' : ''} type="button" onClick={() => setMode('json')}>
-            JSON
-          </button>
           <button className={mode === 'presets' ? 'active' : ''} type="button" onClick={() => setMode('presets')}>
             프리셋
+          </button>
+          <button className={mode === 'json' ? 'active' : ''} type="button" onClick={() => setMode('json')}>
+            JSON
           </button>
         </div>
 
