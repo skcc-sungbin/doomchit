@@ -46,7 +46,7 @@ export function Doomchit() {
   const [playing, setPlaying] = useState(false)
   const [looping, setLooping] = useState(true)
   const [playhead, setPlayhead] = useState(-1)
-  const [mode, setMode] = useState<PanelMode>('json')
+  const [mode, setMode] = useState<PanelMode>('presets')
   const engineRef = useRef<BeatEngine | undefined>(undefined)
   const initialHashRef = useRef<string | null>(null)
   const hasPushedHistoryRef = useRef(false)
