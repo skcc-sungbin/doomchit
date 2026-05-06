@@ -14,7 +14,8 @@
     "@tanstack/react-start": "latest",
     "lucide-react": "^1.14.0",
     "react": "latest",
-    "react-dom": "latest"
+    "react-dom": "latest",
+    "wanted-sans": "^1.0.3"
   },
   "devDependencies": {
     "@types/node": "latest",
