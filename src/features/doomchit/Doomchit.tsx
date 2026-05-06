@@ -19,7 +19,7 @@ import {
   trackIds,
   trackMeta,
 } from './types'
-import { buildHashForPattern, readPatternFromHash } from './urlState'
+import { buildHashForState, defaultPlayback, readHashState } from './urlState'
 
 type PanelMode = 'json' | 'presets'
 
@@ -44,12 +44,14 @@ export function Doomchit() {
   const [message, setMessage] = useState('JSON을 편집하거나 랜덤 버튼으로 시작하세요.')
   const [error, setError] = useState(false)
   const [playing, setPlaying] = useState(false)
-  const [looping, setLooping] = useState(true)
+  const [looping, setLooping] = useState(defaultPlayback.loop)
+  const [pendingAutoplay, setPendingAutoplay] = useState(false)
   const [playhead, setPlayhead] = useState(-1)
   const [mode, setMode] = useState<PanelMode>('presets')
   const engineRef = useRef<BeatEngine | undefined>(undefined)
   const initialHashRef = useRef<string | null>(null)
   const hasPushedHistoryRef = useRef(false)
+  const togglePlaybackRef = useRef<() => Promise<void>>(() => Promise.resolve())
 
   const stepEnergy = useMemo(() => {
     return Array.from({ length: stepCount }, (_, step) => {
@@ -75,9 +77,11 @@ export function Doomchit() {
     initialHashRef.current = window.location.hash
 
     function applyHash() {
-      const result = readPatternFromHash()
+      const result = readHashState()
       setPattern(result.pattern)
       setJsonValue(JSON.stringify(result.pattern, null, 2))
+      setLooping(result.playback.loop)
+      setPendingAutoplay(result.playback.play)
       setError(false)
       switch (result.status) {
         case 'preset':
@@ -106,7 +110,10 @@ export function Doomchit() {
   useEffect(() => {
     if (initialHashRef.current === null) return
     const handle = window.setTimeout(() => {
-      const next = '#' + buildHashForPattern(pattern)
+      const next = '#' + buildHashForState(pattern, {
+        play: playing || pendingAutoplay,
+        loop: looping,
+      })
       if (window.location.hash === next) return
       if (!hasPushedHistoryRef.current && next !== initialHashRef.current) {
         window.history.pushState(null, '', next)
@@ -116,7 +123,7 @@ export function Doomchit() {
       }
     }, 250)
     return () => window.clearTimeout(handle)
-  }, [pattern])
+  }, [pattern, playing, looping, pendingAutoplay])
 
   function commitPattern(nextPattern: BeatPattern, nextMessage: string) {
     const normalized = normalizePattern(nextPattern)
@@ -151,6 +158,10 @@ export function Doomchit() {
   }, [looping, pattern])
 
   useEffect(() => {
+    togglePlaybackRef.current = togglePlayback
+  }, [togglePlayback])
+
+  useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
       if (event.code !== 'Space' || event.repeat) return
       if (isTypingTarget(event.target)) return
@@ -163,9 +174,41 @@ export function Doomchit() {
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [togglePlayback])
 
+  useEffect(() => {
+    if (!pendingAutoplay) return
+
+    let activated = false
+    function activate(event: Event) {
+      if (activated) return
+      activated = true
+      setPendingAutoplay(false)
+
+      if (event.type === 'keydown') {
+        // The space-key handler will start playback itself.
+        if ((event as KeyboardEvent).code === 'Space') return
+      } else if (event.type === 'pointerdown') {
+        const target = event.target as HTMLElement | null
+        // Clicking the play/pause button starts via its own handler.
+        if (target?.closest?.('button[aria-label="재생"], button[aria-label="일시정지"]')) return
+      }
+
+      if (engineRef.current?.isPlaying()) return
+      void togglePlaybackRef.current()
+    }
+
+    const opts = { capture: true } as const
+    document.addEventListener('pointerdown', activate, opts)
+    document.addEventListener('keydown', activate, opts)
+    return () => {
+      document.removeEventListener('pointerdown', activate, opts)
+      document.removeEventListener('keydown', activate, opts)
+    }
+  }, [pendingAutoplay])
+
   function stopPlayback() {
     engineRef.current?.stop()
     setPlaying(false)
+    setPendingAutoplay(false)
     setMessage('정지됨')
   }
 

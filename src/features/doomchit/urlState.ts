@@ -10,24 +10,52 @@ const ENCODED_PREFIX = 'p='
 
 export type HashLoadStatus = 'empty' | 'preset' | 'encoded' | 'unknown' | 'corrupt'
 
+export type PlaybackFlags = {
+  play: boolean
+  loop: boolean
+}
+
+export const defaultPlayback: PlaybackFlags = { play: false, loop: true }
+
 export type HashLoadResult = {
   pattern: BeatPattern
   status: HashLoadStatus
   presetId?: string
+  playback: PlaybackFlags
 }
 
-export function readPatternFromHash(): HashLoadResult {
+export function readHashState(): HashLoadResult {
   if (typeof window === 'undefined') {
-    return { pattern: clonePattern(defaultPreset.pattern), status: 'empty' }
+    return {
+      pattern: clonePattern(defaultPreset.pattern),
+      status: 'empty',
+      playback: { ...defaultPlayback },
+    }
   }
 
   const raw = window.location.hash.replace(/^#/, '')
   if (!raw) {
-    return { pattern: clonePattern(defaultPreset.pattern), status: 'empty' }
+    return {
+      pattern: clonePattern(defaultPreset.pattern),
+      status: 'empty',
+      playback: { ...defaultPlayback },
+    }
   }
 
-  if (raw.startsWith(ENCODED_PREFIX)) {
-    const payload = raw.slice(ENCODED_PREFIX.length)
+  const segments = raw.split('&')
+  const patternSegment = segments[0] ?? ''
+  const playback = parsePlaybackFlags(segments.slice(1))
+  const patternPart = parsePatternSegment(patternSegment)
+
+  return { ...patternPart, playback }
+}
+
+function parsePatternSegment(segment: string): Omit<HashLoadResult, 'playback'> {
+  if (!segment) {
+    return { pattern: clonePattern(defaultPreset.pattern), status: 'empty' }
+  }
+  if (segment.startsWith(ENCODED_PREFIX)) {
+    const payload = segment.slice(ENCODED_PREFIX.length)
     try {
       const json = decompressFromEncodedURIComponent(payload)
       if (!json) throw new Error('empty payload')
@@ -37,12 +65,24 @@ export function readPatternFromHash(): HashLoadResult {
       return { pattern: clonePattern(defaultPreset.pattern), status: 'corrupt' }
     }
   }
-
-  const preset = presets[raw]
+  const preset = presets[segment]
   if (preset) {
-    return { pattern: clonePattern(preset), status: 'preset', presetId: raw }
+    return { pattern: clonePattern(preset), status: 'preset', presetId: segment }
   }
   return { pattern: clonePattern(defaultPreset.pattern), status: 'unknown' }
+}
+
+function parsePlaybackFlags(segments: string[]): PlaybackFlags {
+  const flags: PlaybackFlags = { ...defaultPlayback }
+  for (const segment of segments) {
+    const eq = segment.indexOf('=')
+    if (eq === -1) continue
+    const key = segment.slice(0, eq)
+    const value = segment.slice(eq + 1)
+    if (key === 'play') flags.play = value === '1'
+    else if (key === 'loop') flags.loop = value !== '0'
+  }
+  return flags
 }
 
 export function findMatchingPresetId(pattern: BeatPattern): string | undefined {
@@ -53,8 +93,11 @@ export function findMatchingPresetId(pattern: BeatPattern): string | undefined {
   return undefined
 }
 
-export function buildHashForPattern(pattern: BeatPattern): string {
+export function buildHashForState(pattern: BeatPattern, playback: PlaybackFlags): string {
   const presetId = findMatchingPresetId(pattern)
-  if (presetId) return presetId
-  return ENCODED_PREFIX + compressToEncodedURIComponent(JSON.stringify(pattern))
+  const patternSegment = presetId ?? ENCODED_PREFIX + compressToEncodedURIComponent(JSON.stringify(pattern))
+  const flagSegments: string[] = []
+  if (playback.play !== defaultPlayback.play) flagSegments.push(`play=${playback.play ? 1 : 0}`)
+  if (playback.loop !== defaultPlayback.loop) flagSegments.push(`loop=${playback.loop ? 1 : 0}`)
+  return [patternSegment, ...flagSegments].join('&')
 }
