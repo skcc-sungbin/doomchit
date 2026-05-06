@@ -162,7 +162,7 @@ export function Doomchit() {
         <div className="topbar">
           <div>
             <p className="eyebrow">몰입을 위한 프로그래머블 비트</p>
-            <h1>둠칫</h1>
+            <h1>Doomchit</h1>
           </div>
           <div className="transport">
             <button
