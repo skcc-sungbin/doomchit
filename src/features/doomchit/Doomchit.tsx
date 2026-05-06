@@ -19,6 +19,7 @@ import {
   trackIds,
   trackMeta,
 } from './types'
+import { buildHashForPattern, readPatternFromHash } from './urlState'
 
 type PanelMode = 'json' | 'presets'
 
@@ -47,6 +48,8 @@ export function Doomchit() {
   const [playhead, setPlayhead] = useState(-1)
   const [mode, setMode] = useState<PanelMode>('json')
   const engineRef = useRef<BeatEngine | undefined>(undefined)
+  const initialHashRef = useRef<string | null>(null)
+  const hasPushedHistoryRef = useRef(false)
 
   const stepEnergy = useMemo(() => {
     return Array.from({ length: stepCount }, (_, step) => {
@@ -67,6 +70,53 @@ export function Doomchit() {
   useEffect(() => {
     engineRef.current?.setLoop(looping)
   }, [looping])
+
+  useEffect(() => {
+    initialHashRef.current = window.location.hash
+
+    function applyHash() {
+      const result = readPatternFromHash()
+      setPattern(result.pattern)
+      setJsonValue(JSON.stringify(result.pattern, null, 2))
+      setError(false)
+      switch (result.status) {
+        case 'preset':
+          setMessage(`${result.pattern.name} 프리셋을 불러왔습니다.`)
+          break
+        case 'encoded':
+          setMessage(`공유 링크에서 ${result.pattern.name} 패턴을 불러왔습니다.`)
+          break
+        case 'corrupt':
+          setMessage('공유 링크가 손상되어 기본 프리셋을 불러왔습니다.')
+          break
+        case 'unknown':
+          setMessage('알 수 없는 프리셋이라 기본을 불러왔습니다.')
+          break
+        case 'empty':
+          break
+      }
+    }
+
+    applyHash()
+
+    window.addEventListener('popstate', applyHash)
+    return () => window.removeEventListener('popstate', applyHash)
+  }, [])
+
+  useEffect(() => {
+    if (initialHashRef.current === null) return
+    const handle = window.setTimeout(() => {
+      const next = '#' + buildHashForPattern(pattern)
+      if (window.location.hash === next) return
+      if (!hasPushedHistoryRef.current && next !== initialHashRef.current) {
+        window.history.pushState(null, '', next)
+        hasPushedHistoryRef.current = true
+      } else {
+        window.history.replaceState(null, '', next)
+      }
+    }, 250)
+    return () => window.clearTimeout(handle)
+  }, [pattern])
 
   function commitPattern(nextPattern: BeatPattern, nextMessage: string) {
     const normalized = normalizePattern(nextPattern)
